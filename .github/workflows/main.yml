@@ -18,7 +18,7 @@ jobs:
       CGO_ENABLED: 0
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up directories
         run: mkdir -p binaries
@@ -35,7 +35,7 @@ jobs:
           go build -o binaries/generate cmd/generate/generate.go
 
       - name: Upload binaries as artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: binaries
           path: binaries/
@@ -47,7 +47,7 @@ jobs:
       image: golang:1.12-alpine3.10
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Run tests
         run: go test -v ./...
@@ -61,8 +61,7 @@ jobs:
       CGO_ENABLED: 1
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Run race tests
         run: go test -race -v ./...
-
