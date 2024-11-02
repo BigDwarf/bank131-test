@@ -1,0 +1,68 @@
+name: Go CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.12-alpine3.10
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up directories
+        run: mkdir -p binaries
+
+      - name: Print working directory
+        run: pwd
+
+      - name: Show Go environment
+        run: go env
+
+      - name: Build binaries
+        run: |
+          go build -o binaries/dupe cmd/dupe/dupe.go
+          go build -o binaries/generate cmd/generate/generate.go
+
+      - name: Upload binaries as artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: binaries
+          path: binaries/
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.12-alpine3.10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run tests
+        run: go test -v ./...
+
+  test-race:
+    name: Run Race Tests
+    runs-on: ubuntu-latest
+    container:
+      image: golang:1.12
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run race tests
+        run: go test -race -v ./...
+
