@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 var errIsNotDir = errors.New("path is not a directory")
@@ -38,17 +39,29 @@ func Find(dir string) (map[string][]string, error) {
 		return nil, fmt.Errorf("failed to find duplicates by size: %v", err)
 	}
 
-	duplicateByBytes, err := findDuplicateByBytes(dir, duplicateBySize)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find duplicates by bytes: %v", err)
+	inputCh := generateSizePipeline(duplicateBySize)
+
+	duplicateByBytes1 := findDuplicateByBytes(dir, inputCh)
+	duplicateByBytes2 := findDuplicateByBytes(dir, inputCh)
+	duplicateByBytes3 := findDuplicateByBytes(dir, inputCh)
+
+	duplicateByFirstBytes := merge(duplicateByBytes1, duplicateByBytes2, duplicateByBytes3)
+
+	duplicateByChecksum1 := findDuplicateByChecksum(dir, duplicateByFirstBytes)
+	duplicateByChecksum2 := findDuplicateByChecksum(dir, duplicateByFirstBytes)
+	duplicateByChecksum3 := findDuplicateByChecksum(dir, duplicateByFirstBytes)
+
+	duplicatesCh := merge(duplicateByChecksum1, duplicateByChecksum2, duplicateByChecksum3)
+
+	duplicates := make(map[string][]string)
+
+	for bucket := range duplicatesCh {
+		for key, files := range bucket {
+			duplicates[key] = files
+		}
 	}
 
-	duplicateFiles, err := findDuplicateByChecksum(dir, duplicateByBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find duplicates by checksum: %v", err)
-	}
-
-	return duplicateFiles, nil
+	return duplicates, nil
 }
 
 // validDir will check if the path given exists, and is a directory.
@@ -63,4 +76,43 @@ func validDir(path string) error {
 	}
 
 	return nil
+}
+
+func generateSizePipeline(duplicateBySize map[int64][]string) <-chan []string {
+	out := make(chan []string)
+	go func() {
+		for _, bucket := range duplicateBySize {
+			out <- bucket
+		}
+
+		close(out)
+	}()
+
+	return out
+}
+
+func merge(cs ...<-chan map[string][]string) <-chan map[string][]string {
+	wg := sync.WaitGroup{}
+	out := make(chan map[string][]string)
+
+	// Start an output goroutine for each input channel in cs.  output
+	// copies values from c to out until c is closed, then calls wg.Done.
+	output := func(c <-chan map[string][]string) {
+		for bucket := range c {
+			out <- bucket
+		}
+		wg.Done()
+	}
+
+	wg.Add(len(cs))
+	for _, c := range cs {
+		go output(c)
+	}
+
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+
+	return out
 }
