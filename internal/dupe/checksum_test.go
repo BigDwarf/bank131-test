@@ -34,18 +34,19 @@ func Test_findDuplicateByChecksum(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	duplicateByFirstByte := map[string][]string{
+	duplicateByFirstByte := make(chan map[string][]string, 1)
+
+	duplicateByFirstByte <- map[string][]string{
 		"10": {
 			filepath.Base(f),
 			filepath.Base(fCp),
 		},
 	}
+	close(duplicateByFirstByte)
 
-	duplicateByChecksum, err := findDuplicateByChecksum(tmpDir, duplicateByFirstByte)
-	if err != nil {
-		t.Fatalf("Got unexpected error: %v", err)
-	}
+	duplicateByChecksumCh := findDuplicateByChecksum(tmpDir, duplicateByFirstByte)
 
+	var duplicateByChecksum = <-duplicateByChecksumCh
 	if len(duplicateByChecksum) != 1 {
 		t.Errorf("Got unexpected len expected 1 got: %d", len(duplicateByChecksum))
 	}

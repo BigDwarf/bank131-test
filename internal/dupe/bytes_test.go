@@ -18,10 +18,16 @@ func Test_findDuplicateByBytes(t *testing.T) {
 			t.Logf("Failed to clean up test %s: %v", t.Name(), err)
 		}
 	}()
-
-	duplicateByBytes, err := findDuplicateByBytes(tmpDir, duplicateBySize)
-	if err != nil {
-		t.Fatalf("Got unexpected error when find duplicates by bytes: %v", err)
+	duplicateByBytes := make(map[string][]string)
+	byBytes := findDuplicateByBytes(tmpDir, duplicateBySize)
+	for v := range byBytes {
+		for bucketName, duplicates := range v {
+			if _, ok := duplicateByBytes[bucketName]; ok {
+				duplicateByBytes[bucketName] = append(duplicateByBytes[bucketName], duplicates...)
+			} else {
+				duplicateByBytes[bucketName] = duplicates
+			}
+		}
 	}
 
 	// We can assert that the exact map, but we get little benefit of doing so,
@@ -38,7 +44,7 @@ func Test_findDuplicateByBytes(t *testing.T) {
 	}
 }
 
-func setupTestFindDuplicateByBytes(t *testing.T) (string, map[int64][]string, func() error) {
+func setupTestFindDuplicateByBytes(t *testing.T) (string, <-chan []string, func() error) {
 	tmpDir, err := ioutil.TempDir("", t.Name())
 	if err != nil {
 		t.Fatal("Failed to create tmp dir for testdata")
@@ -66,9 +72,13 @@ func setupTestFindDuplicateByBytes(t *testing.T) (string, map[int64][]string, fu
 	}
 
 	sort.Strings(bucket[size])
-
+	bucketCh := make(chan []string, len(bucket))
+	defer close(bucketCh)
+	for _, v := range bucket {
+		bucketCh <- v
+	}
 	return tmpDir,
-		bucket,
+		bucketCh,
 		func() error {
 			return os.RemoveAll(tmpDir)
 		}
