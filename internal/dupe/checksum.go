@@ -3,11 +3,31 @@ package dupe
 import (
 	"crypto/sha1"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 )
 
-func findDuplicateByChecksum(basePath string, duplicateByFirstByte map[string][]string) (map[string][]string, error) {
+func findDuplicateByChecksum(basePath string, duplicateByFirstByte <-chan map[string][]string) <-chan map[string][]string {
+	out := make(chan map[string][]string)
+
+	go func() {
+		for bucket := range duplicateByFirstByte {
+			matches, err := checkChecksum(basePath, bucket)
+			if err != nil {
+				log.Printf("Failed to check file checksum: %v", err)
+			}
+
+			out <- matches
+		}
+
+		close(out)
+	}()
+
+	return out
+}
+
+func checkChecksum(basePath string, duplicateByFirstByte map[string][]string) (map[string][]string, error) {
 	if !filepath.IsAbs(basePath) {
 		return nil, &pathNotAbs{path: basePath}
 	}
